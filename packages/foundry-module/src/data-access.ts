@@ -4264,7 +4264,21 @@ export class FoundryDataAccess {
         throw new Error('Journal entry not found');
       }
 
-      // Mode 1: Create a new page
+      // Mode 1: pageId + newPageName -> rename AND update the existing page
+      if (request.pageId && request.newPageName) {
+        const page = journal.pages.get(request.pageId);
+        if (!page) {
+          throw new Error(`Page not found: ${request.pageId}`);
+        }
+        await page.update({
+          name: request.newPageName,
+          'text.content': request.content,
+        });
+        this.auditLog('updateJournalContent', request, 'success');
+        return { success: true, pageId: page.id, pageName: page.name };
+      }
+
+      // Mode 2: Create a new page
       if (request.newPageName) {
         const created = await journal.createEmbeddedDocuments('JournalEntryPage', [
           {
@@ -4280,7 +4294,7 @@ export class FoundryDataAccess {
         return { success: true, pageId: newPage?.id || '', pageName: request.newPageName };
       }
 
-      // Mode 2: Update a specific page by ID
+      // Mode 3: Update a specific page by ID
       if (request.pageId) {
         const page = journal.pages.get(request.pageId);
         if (!page) {
@@ -4293,7 +4307,7 @@ export class FoundryDataAccess {
         return { success: true, pageId: page.id, pageName: page.name };
       }
 
-      // Mode 3: Update first text page or create one if none exists (backward compat)
+      // Mode 4: Update first text page or create one if none exists (backward compat)
       const firstPage = journal.pages.find((page: any) => page.type === 'text');
 
       if (firstPage) {
