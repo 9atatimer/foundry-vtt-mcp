@@ -105,7 +105,14 @@ jobs:
         
     - name: Build MCP Server (Bundled)
       run: npm run build:bundle --workspace=packages/mcp-server
-        
+
+    # The Mac and release jobs already do this. Without it this job zipped whatever
+    # dist/ happened to be lying around (it is gitignored, so on a clean checkout
+    # that means stale or missing compiled code), producing a module zip that did
+    # not contain the build under test.
+    - name: Build Foundry Module
+      run: npm run build --workspace=packages/foundry-module
+
     - name: Setup NSIS
       run: choco install nsis -y
 
