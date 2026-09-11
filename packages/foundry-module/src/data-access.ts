@@ -48,6 +48,7 @@ interface CharacterItem {
   type: string;
   img?: string;
   system: Record<string, unknown>;
+  effects: Record<string, unknown>[];
 }
 
 interface CharacterEffect {
@@ -1703,12 +1704,14 @@ export class FoundryDataAccess {
       ...(actor.img ? { img: actor.img } : {}),
       system: this.sanitizeData((actor as any).system),
       items: actor.items.map(item => {
+        const itemData = item.toObject() as Record<string, any>;
         return {
           id: item.id,
           name: item.name,
           type: item.type,
           ...(item.img ? { img: item.img } : {}),
-          system: this.sanitizeData(item.system),
+          system: this.sanitizeData(itemData.system ?? {}),
+          effects: this.sanitizeData(itemData.effects ?? []),
         };
       }),
       effects: actor.effects.map(effect => {
