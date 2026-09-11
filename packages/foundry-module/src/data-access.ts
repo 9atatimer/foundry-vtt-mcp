@@ -321,6 +321,23 @@ class PersistentCreatureIndex {
   private buildInProgress = false;
   private hooksRegistered = false;
 
+  /**
+   * Check whether informational notifications should be shown (user setting)
+   */
+  private showInfoNotifications(): boolean {
+    return game.settings.get(this.moduleId, 'informationNotifications') !== false;
+  }
+
+  /**
+   * Show an informational notification unless the user disabled them
+   */
+  private info(message: string): any {
+    if (!this.showInfoNotifications()) {
+      return undefined;
+    }
+    return ui.notifications?.info(message);
+  }
+
   constructor() {
     this.registerFoundryHooks();
   }
@@ -649,9 +666,7 @@ class PersistentCreatureIndex {
       const packFingerprints = new Map<string, PackFingerprint>();
 
       // Show initial progress notification
-      ui.notifications?.info(
-        `Starting enhanced creature index build from ${actorPacks.length} packs...`
-      );
+      this.info(`Starting enhanced creature index build from ${actorPacks.length} packs...`);
 
       for (let i = 0; i < actorPacks.length; i++) {
         const pack = actorPacks[i];
@@ -662,7 +677,7 @@ class PersistentCreatureIndex {
           if (progressNotification) {
             progressNotification.remove();
           }
-          progressNotification = ui.notifications?.info(
+          progressNotification = this.info(
             `Building creature index... ${progressPercent}% (${i + 1}/${actorPacks.length}) Processing: ${pack.metadata.label}`
           );
         }
@@ -682,7 +697,7 @@ class PersistentCreatureIndex {
             if (progressNotification) {
               progressNotification.remove();
             }
-            progressNotification = ui.notifications?.info(
+            progressNotification = this.info(
               `Processing large pack: ${pack.metadata.label} (${packSize} documents)...`
             );
           }
@@ -700,7 +715,7 @@ class PersistentCreatureIndex {
             if (progressNotification) {
               progressNotification.remove();
             }
-            progressNotification = ui.notifications?.info(
+            progressNotification = this.info(
               `Index Progress: ${i + 1}/${actorPacks.length} packs complete, ${totalCreaturesSoFar} creatures indexed`
             );
           }
@@ -717,7 +732,7 @@ class PersistentCreatureIndex {
       if (progressNotification) {
         progressNotification.remove();
       }
-      ui.notifications?.info(
+      this.info(
         `Saving enhanced index to world database... (${enhancedCreatures.length} creatures)`
       );
 
@@ -740,7 +755,7 @@ class PersistentCreatureIndex {
       const errorText = totalErrors > 0 ? ` (${totalErrors} extraction errors)` : '';
       const successMessage = `Enhanced creature index complete! ${enhancedCreatures.length} creatures indexed from ${actorPacks.length} packs in ${buildTimeSeconds}s${errorText}`;
 
-      ui.notifications?.info(successMessage);
+      this.info(successMessage);
 
       return enhancedCreatures;
     } catch (error) {
@@ -1003,9 +1018,7 @@ class PersistentCreatureIndex {
       const enhancedCreatures: PF2eCreatureIndex[] = [];
       const packFingerprints = new Map<string, PackFingerprint>();
 
-      ui.notifications?.info(
-        `Starting PF2e creature index build from ${actorPacks.length} packs...`
-      );
+      this.info(`Starting PF2e creature index build from ${actorPacks.length} packs...`);
 
       let currentPack = 0;
       for (const pack of actorPacks) {
@@ -1014,7 +1027,7 @@ class PersistentCreatureIndex {
         if (progressNotification) {
           progressNotification.remove();
         }
-        progressNotification = ui.notifications?.info(
+        progressNotification = this.info(
           `Building PF2e index: Pack ${currentPack}/${actorPacks.length} (${pack.metadata.label})...`
         );
 
@@ -1029,9 +1042,7 @@ class PersistentCreatureIndex {
       if (progressNotification) {
         progressNotification.remove();
       }
-      ui.notifications?.info(
-        `Saving PF2e index to world database... (${enhancedCreatures.length} creatures)`
-      );
+      this.info(`Saving PF2e index to world database... (${enhancedCreatures.length} creatures)`);
 
       const persistentIndex: PersistentEnhancedIndex = {
         metadata: {
@@ -1050,7 +1061,7 @@ class PersistentCreatureIndex {
       const errorText = totalErrors > 0 ? ` (${totalErrors} extraction errors)` : '';
       const successMessage = `PF2e creature index complete! ${enhancedCreatures.length} creatures indexed from ${actorPacks.length} packs in ${buildTimeSeconds}s${errorText}`;
 
-      ui.notifications?.info(successMessage);
+      this.info(successMessage);
 
       return enhancedCreatures;
     } catch (error) {
@@ -1256,9 +1267,7 @@ class PersistentCreatureIndex {
       const enhancedCreatures: CosmereRpgCreatureIndex[] = [];
       const packFingerprints = new Map<string, PackFingerprint>();
 
-      ui.notifications?.info(
-        `Starting Cosmere RPG creature index build from ${actorPacks.length} packs...`
-      );
+      this.info(`Starting Cosmere RPG creature index build from ${actorPacks.length} packs...`);
 
       for (let i = 0; i < actorPacks.length; i++) {
         const pack = actorPacks[i];
@@ -1268,7 +1277,7 @@ class PersistentCreatureIndex {
           if (progressNotification) {
             progressNotification.remove();
           }
-          progressNotification = ui.notifications?.info(
+          progressNotification = this.info(
             `Building creature index... ${progressPercent}% (${i + 1}/${actorPacks.length}) Processing: ${pack.metadata.label}`
           );
         }
@@ -1289,7 +1298,7 @@ class PersistentCreatureIndex {
             if (progressNotification) {
               progressNotification.remove();
             }
-            progressNotification = ui.notifications?.info(
+            progressNotification = this.info(
               `Index Progress: ${i + 1}/${actorPacks.length} packs complete, ${totalCreaturesSoFar} creatures indexed`
             );
           }
@@ -1304,7 +1313,7 @@ class PersistentCreatureIndex {
       if (progressNotification) {
         progressNotification.remove();
       }
-      ui.notifications?.info(
+      this.info(
         `Saving enhanced index to world database... (${enhancedCreatures.length} creatures)`
       );
 
@@ -1325,7 +1334,7 @@ class PersistentCreatureIndex {
       const errorText = totalErrors > 0 ? ` (${totalErrors} extraction errors)` : '';
       const successMessage = `Cosmere RPG creature index complete! ${enhancedCreatures.length} creatures indexed from ${actorPacks.length} packs in ${buildTimeSeconds}s${errorText}`;
 
-      ui.notifications?.info(successMessage);
+      this.info(successMessage);
 
       return enhancedCreatures;
     } catch (error) {
@@ -1371,9 +1380,7 @@ class PersistentCreatureIndex {
       const enhancedCreatures: MGT2eCreatureIndex[] = [];
       const packFingerprints = new Map<string, PackFingerprint>();
 
-      ui.notifications?.info(
-        `Starting Traveller creature index build from ${actorPacks.length} packs...`
-      );
+      this.info(`Starting Traveller creature index build from ${actorPacks.length} packs...`);
 
       for (let i = 0; i < actorPacks.length; i++) {
         const pack = actorPacks[i];
@@ -1382,7 +1389,7 @@ class PersistentCreatureIndex {
 
         if (i % 3 === 0) {
           if (progressNotification) progressNotification.remove();
-          progressNotification = ui.notifications?.info(
+          progressNotification = this.info(
             `Building Traveller index... ${Math.round((i / actorPacks.length) * 100)}% — ${pack.metadata.label}`
           );
         }
@@ -1413,7 +1420,7 @@ class PersistentCreatureIndex {
 
       const secs = Math.round((Date.now() - startTime) / 1000);
       const errText = totalErrors > 0 ? ` (${totalErrors} errors)` : '';
-      ui.notifications?.info(
+      this.info(
         `Traveller creature index complete! ${enhancedCreatures.length} actors indexed in ${secs}s${errText}`
       );
 
