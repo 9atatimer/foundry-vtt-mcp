@@ -24,6 +24,7 @@ import { SceneTools } from './tools/scene.js';
 
 import { ActorCreationTools } from './tools/actor-creation.js';
 import { ActorManagementTools } from './tools/actor-management.js';
+import { EffectManagementTools } from './tools/effect-management.js';
 
 import { QuestCreationTools } from './tools/quest-creation.js';
 
@@ -1194,6 +1195,7 @@ async function startBackend(): Promise<void> {
 
   const actorCreationTools = new ActorCreationTools({ foundryClient, logger });
   const actorManagementTools = new ActorManagementTools({ foundryClient, logger, systemRegistry });
+  const effectManagementTools = new EffectManagementTools({ foundryClient, logger });
 
   const dsa5CharacterCreator = new DSA5CharacterCreator({ foundryClient, logger });
 
@@ -1422,6 +1424,7 @@ async function startBackend(): Promise<void> {
 
     ...actorCreationTools.getToolDefinitions(),
     ...actorManagementTools.getToolDefinitions(),
+    ...effectManagementTools.getToolDefinitions(),
 
     ...dsa5CharacterCreator.getToolDefinitions(),
 
@@ -1601,6 +1604,11 @@ async function startBackend(): Promise<void> {
 
                 case 'manage-actors':
                   result = await actorManagementTools.handleManageActors(args);
+
+                  break;
+
+                case 'manage-effects':
+                  result = await effectManagementTools.handleManageEffects(args);
 
                   break;
 

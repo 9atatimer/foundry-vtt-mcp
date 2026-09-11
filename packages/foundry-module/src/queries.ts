@@ -133,6 +133,7 @@ export class QueryHandlers {
     CONFIG.queries[`${modulePrefix}.deleteActors`] = this.handleDeleteActors.bind(this);
     CONFIG.queries[`${modulePrefix}.updateActorItems`] = this.handleUpdateActorItems.bind(this);
     CONFIG.queries[`${modulePrefix}.deleteActorItems`] = this.handleDeleteActorItems.bind(this);
+    CONFIG.queries[`${modulePrefix}.manageEffects`] = this.handleManageEffects.bind(this);
 
     // Phase 7: Token manipulation queries
     CONFIG.queries[`${modulePrefix}.move-token`] = this.handleMoveToken.bind(this);
@@ -2122,5 +2123,19 @@ export class QueryHandlers {
     if (!gmCheck.allowed) return { error: 'Access denied', success: false };
     this.dataAccess.validateFoundryState();
     return this.dataAccess.deleteActorItems(data.actorIdentifier, data.itemIds);
+  }
+
+  private async handleManageEffects(data: {
+    action: 'create' | 'update' | 'delete';
+    actorIdentifier: string;
+    parentType: 'actor' | 'item';
+    parentItemIdentifier?: string;
+    effectId?: string;
+    effectData?: Record<string, any>;
+  }): Promise<any> {
+    const gmCheck = this.validateGMAccess();
+    if (!gmCheck.allowed) return { error: 'Access denied', success: false };
+    this.dataAccess.validateFoundryState();
+    return this.dataAccess.manageEffects(data);
   }
 }
