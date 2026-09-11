@@ -327,43 +327,11 @@ export class CharacterTools {
     this.logger.info('Getting character entity', { characterIdentifier, entityIdentifier });
 
     try {
-      // First get the character
-      const characterData = await this.foundryClient.query('foundry-mcp-bridge.getCharacterInfo', {
-        characterName: characterIdentifier,
+      const result = await this.foundryClient.query('foundry-mcp-bridge.getCharacterEntity', {
+        characterIdentifier,
+        entityIdentifier,
       });
-
-      // Try to find the entity in different collections
-      let entity = null;
-      let entityType = null;
-
-      // 1. Try to find as an item (by ID or name)
-      entity = characterData.items?.find(
-        (i: any) =>
-          i.id === entityIdentifier || i.name.toLowerCase() === entityIdentifier.toLowerCase()
-      );
-      if (entity) {
-        entityType = 'item';
-      }
-
-      // 2. Try to find as an action (by name)
-      if (!entity && characterData.actions) {
-        entity = characterData.actions.find(
-          (a: any) => a.name.toLowerCase() === entityIdentifier.toLowerCase()
-        );
-        if (entity) {
-          entityType = 'action';
-        }
-      }
-
-      // 3. Try to find as an effect (by name)
-      if (!entity && characterData.effects) {
-        entity = characterData.effects.find(
-          (e: any) => e.name.toLowerCase() === entityIdentifier.toLowerCase()
-        );
-        if (entity) {
-          entityType = 'effect';
-        }
-      }
+      const { entityType, entity } = result;
 
       if (!entity) {
         throw new Error(

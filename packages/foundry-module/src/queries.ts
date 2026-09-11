@@ -30,6 +30,7 @@ export class QueryHandlers {
 
     // Character/Actor queries
     CONFIG.queries[`${modulePrefix}.getCharacterInfo`] = this.handleGetCharacterInfo.bind(this);
+    CONFIG.queries[`${modulePrefix}.getCharacterEntity`] = this.handleGetCharacterEntity.bind(this);
     CONFIG.queries[`${modulePrefix}.listActors`] = this.handleListActors.bind(this);
 
     // Compendium queries
@@ -217,6 +218,37 @@ export class QueryHandlers {
     } catch (error) {
       throw new Error(
         `Failed to get character info: ${error instanceof Error ? error.message : 'Unknown error'}`
+      );
+    }
+  }
+
+  /**
+   * Handle character entity request
+   */
+  private async handleGetCharacterEntity(data: {
+    characterIdentifier: string;
+    entityIdentifier: string;
+  }): Promise<any> {
+    try {
+      // SECURITY: Silent GM validation
+      const gmCheck = this.validateGMAccess();
+      if (!gmCheck.allowed) {
+        return { error: 'Access denied', success: false };
+      }
+
+      this.dataAccess.validateFoundryState();
+
+      if (!data.characterIdentifier) {
+        throw new Error('characterIdentifier is required');
+      }
+      if (!data.entityIdentifier) {
+        throw new Error('entityIdentifier is required');
+      }
+
+      return await this.dataAccess.getCharacterEntity(data);
+    } catch (error) {
+      throw new Error(
+        `Failed to get character entity: ${error instanceof Error ? error.message : 'Unknown error'}`
       );
     }
   }

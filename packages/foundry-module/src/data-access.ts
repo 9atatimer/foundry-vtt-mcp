@@ -7343,12 +7343,17 @@ export class FoundryDataAccess {
     this.validateFoundryState();
 
     try {
+      const serializeDocument = (document: any): Record<string, any> => {
+        const source = document?.toObject?.() ?? document?._source ?? document ?? {};
+        return source as Record<string, any>;
+      };
+
       // Find the character first
       const actors = game.actors?.contents || [];
       const character = actors.find(
         (actor: any) =>
           actor.id === data.characterIdentifier ||
-          actor.name.toLowerCase() === data.characterIdentifier.toLowerCase()
+          actor.name?.toLowerCase() === data.characterIdentifier.toLowerCase()
       );
 
       if (!character) {
@@ -7360,10 +7365,12 @@ export class FoundryDataAccess {
       let entity = items.find(
         (item: any) =>
           item.id === data.entityIdentifier ||
-          item.name.toLowerCase() === data.entityIdentifier.toLowerCase()
+          item.name?.toLowerCase() === data.entityIdentifier.toLowerCase()
       );
 
       if (entity) {
+        const itemData = serializeDocument(entity);
+        const itemSystem = this.sanitizeData(itemData.system ?? {});
         return {
           success: true,
           entityType: 'item',
@@ -7372,8 +7379,9 @@ export class FoundryDataAccess {
             name: entity.name,
             type: entity.type,
             img: entity.img,
-            description: entity.system?.description?.value || entity.system?.description || '',
-            system: entity.system,
+            description: itemSystem.description?.value || itemSystem.description || '',
+            system: itemSystem,
+            effects: itemData.effects ?? [],
           },
         };
       }
@@ -7387,39 +7395,69 @@ export class FoundryDataAccess {
         entity = actions.find(
           (action: any) =>
             action.id === data.entityIdentifier ||
-            action.name?.toLowerCase() === data.entityIdentifier.toLowerCase()
+            (action.name || action.label)?.toLowerCase() === data.entityIdentifier.toLowerCase()
         );
 
         if (entity) {
+          const actionData = this.sanitizeData(serializeDocument(entity));
           return {
             success: true,
             entityType: 'action',
-            entity,
+            entity: {
+              ...actionData,
+              name: entity.label || entity.name,
+              ...(entity.item ? { itemId: entity.item.id } : {}),
+            },
           };
         }
       }
 
-      // Search in effects
+      // Search in actor-owned effects
       const effects = character.effects?.contents || [];
       entity = effects.find(
         (effect: any) =>
           effect.id === data.entityIdentifier ||
-          effect.name?.toLowerCase() === data.entityIdentifier.toLowerCase()
+          (effect.name || effect.label)?.toLowerCase() === data.entityIdentifier.toLowerCase()
       );
 
       if (entity) {
+        const effectData = serializeDocument(entity);
         return {
           success: true,
           entityType: 'effect',
           entity: {
+            ...effectData,
             id: entity.id,
             name: entity.name || entity.label,
-            icon: entity.icon,
-            disabled: entity.disabled,
-            duration: entity.duration,
-            changes: entity.changes,
+            scope: 'actor',
           },
         };
+      }
+
+      // Search in Item-owned effects
+      for (const item of items) {
+        const itemEffects = item.effects?.contents || Array.from(item.effects || []);
+        entity = itemEffects.find(
+          (effect: any) =>
+            effect.id === data.entityIdentifier ||
+            (effect.name || effect.label)?.toLowerCase() === data.entityIdentifier.toLowerCase()
+        );
+
+        if (entity) {
+          const effectData = serializeDocument(entity);
+          return {
+            success: true,
+            entityType: 'effect',
+            entity: {
+              ...effectData,
+              id: entity.id,
+              name: entity.name || entity.label,
+              scope: 'item',
+              parentItemId: item.id,
+              parentItemName: item.name,
+            },
+          };
+        }
       }
 
       throw new Error(
