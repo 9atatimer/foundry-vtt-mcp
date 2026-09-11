@@ -1860,6 +1860,10 @@ export class FoundryDataAccess {
       invested?: boolean;
       // For actions
       actionType?: string;
+      // For effects
+      scope?: 'actor' | 'item';
+      parentItemId?: string;
+      parentItemName?: string;
     }>;
     totalMatches: number;
   }> {
@@ -2062,13 +2066,37 @@ export class FoundryDataAccess {
 
         const effectAny = effect;
         if (!matchesQuery(effectAny.name || effectAny.label)) continue;
+        const effectData = effectAny.toObject?.() ?? effectAny._source ?? effectAny;
 
         matches.push({
           id: effectAny.id,
           name: effectAny.name || effectAny.label,
           type: 'effect',
-          description: effectAny.description || undefined,
+          description: effectData.description || undefined,
+          scope: 'actor',
         });
+      }
+
+      for (const item of actor.items) {
+        if (matches.length >= limit) break;
+
+        for (const effect of item.effects || []) {
+          if (matches.length >= limit) break;
+
+          const effectAny = effect;
+          if (!matchesQuery(effectAny.name || effectAny.label)) continue;
+          const effectData = effectAny.toObject?.() ?? effectAny._source ?? effectAny;
+
+          matches.push({
+            id: effectAny.id,
+            name: effectAny.name || effectAny.label,
+            type: 'effect',
+            description: effectData.description || undefined,
+            scope: 'item',
+            parentItemId: item.id,
+            parentItemName: item.name,
+          });
+        }
       }
     }
 
