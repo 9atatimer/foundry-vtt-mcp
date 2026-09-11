@@ -34,7 +34,7 @@ export class PlaylistTools {
       {
         name: 'manage-playlists',
         description:
-          'Create, update, delete, or describe playlists. create: name (+mode/fade/description/sorting/folder/color) and optional sounds [{path, name?, volume?, repeat?, fade?}]. update: playlist identifier + fields and/or sounds to patch (matched by exact id or unique path/name within the playlist). delete: playlist identifier. describe: no identifier lists all playlists; with identifier returns the full playlist with all sounds.',
+          'Create, update, delete, or describe playlists. create: name (+mode/fade/description/sorting/folder/color) and optional sounds [{path, name?, volume?, repeat?, fade?}]. update: playlist identifier + fields and/or sounds to patch (matched by exact id or unique path/name within the playlist). delete: playlist identifier matched by exact id or name only (never partial). describe: no identifier lists all playlists; with identifier returns the full playlist with all sounds.',
         inputSchema: {
           type: 'object',
           properties: {

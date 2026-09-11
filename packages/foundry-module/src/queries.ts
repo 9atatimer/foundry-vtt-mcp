@@ -43,9 +43,7 @@ export class QueryHandlers {
     CONFIG.queries[`${modulePrefix}.getActiveScene`] = this.handleGetActiveScene.bind(this);
     CONFIG.queries[`${modulePrefix}.list-scenes`] = this.handleListScenes.bind(this);
     CONFIG.queries[`${modulePrefix}.switch-scene`] = this.handleSwitchScene.bind(this);
-    CONFIG.queries[`${modulePrefix}.get-scene-music`] = this.handleGetSceneMusic.bind(this);
     CONFIG.queries[`${modulePrefix}.update-scene-music`] = this.handleUpdateSceneMusic.bind(this);
-    CONFIG.queries[`${modulePrefix}.list-playlists`] = this.handleListPlaylists.bind(this);
     CONFIG.queries[`${modulePrefix}.manage-playlists`] = this.handleManagePlaylists.bind(this);
     CONFIG.queries[`${modulePrefix}.control-playlist`] = this.handleControlPlaylist.bind(this);
 
@@ -1080,23 +1078,6 @@ export class QueryHandlers {
     }
   }
 
-  private async handleGetSceneMusic(data: any): Promise<any> {
-    try {
-      const gmCheck = this.validateGMAccess();
-      if (!gmCheck.allowed) {
-        return { error: 'Access denied', success: false };
-      }
-      if (!data?.scene_identifier) {
-        throw new Error('scene_identifier is required');
-      }
-      return await this.dataAccess.getSceneMusic(data);
-    } catch (error) {
-      throw new Error(
-        `Failed to get scene music: ${error instanceof Error ? error.message : 'Unknown error'}`
-      );
-    }
-  }
-
   private async handleUpdateSceneMusic(data: any): Promise<any> {
     try {
       const gmCheck = this.validateGMAccess();
@@ -1110,20 +1091,6 @@ export class QueryHandlers {
     } catch (error) {
       throw new Error(
         `Failed to update scene music: ${error instanceof Error ? error.message : 'Unknown error'}`
-      );
-    }
-  }
-
-  private async handleListPlaylists(data: any): Promise<any> {
-    try {
-      const gmCheck = this.validateGMAccess();
-      if (!gmCheck.allowed) {
-        return { error: 'Access denied', success: false };
-      }
-      return await this.dataAccess.listPlaylists(data || {});
-    } catch (error) {
-      throw new Error(
-        `Failed to list playlists: ${error instanceof Error ? error.message : 'Unknown error'}`
       );
     }
   }

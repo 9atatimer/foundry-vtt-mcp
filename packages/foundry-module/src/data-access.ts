@@ -200,6 +200,10 @@ interface SceneInfo {
   lights: number;
   sounds: number;
   notes: SceneNote[];
+  music: {
+    playlist: { id: string; name: string } | null;
+    playlistSound: { id: string; name: string } | null;
+  };
 }
 
 interface SceneToken {
@@ -3758,6 +3762,7 @@ export class FoundryDataAccess {
       walls: scene.walls.size,
       lights: scene.lights.size,
       sounds: scene.sounds.size,
+      music: this.resolveSceneMusicBinding(scene),
       notes: scene.notes.map((note: any) => ({
         id: note.id,
         text: note.text || '',
@@ -7231,6 +7236,7 @@ export class FoundryDataAccess {
         lighting: scene.lights?.size || 0,
         sounds: scene.sounds?.size || 0,
         navigation: scene.navigation || false,
+        music: this.resolveSceneMusicBinding(scene),
       }));
     } catch (error) {
       throw new Error(
@@ -7320,13 +7326,15 @@ export class FoundryDataAccess {
 
   /**
    * Resolve a playlist/sound identifier to its document. Accepts an exact id,
-   * an exact name, or a unique case-insensitive name substring. Returns the
-   * document, or null for a null/empty identifier (intentional clear).
+   * an exact name, or (unless opts.exact) a unique case-insensitive name
+   * substring. Returns the document, or null for a null/empty identifier
+   * (intentional clear).
    */
   private findMusicDoc(
     collection: any,
     identifier: string | null | undefined,
-    kind: 'playlist' | 'playlistSound'
+    kind: 'playlist' | 'playlistSound',
+    opts?: { exact?: boolean }
   ): any | null {
     if (identifier === null || identifier === undefined || identifier === '') {
       return null;
@@ -7337,11 +7345,13 @@ export class FoundryDataAccess {
     const docs = collection?.contents || collection || [];
     const idMatch = docs.find((d: any) => d.id === identifier);
     if (idMatch) return idMatch;
-    const exact = docs.find((d: any) => (d.name || '').toLowerCase() === identifier.toLowerCase());
+    const lowered = identifier.toLowerCase();
+    const exact = docs.find((d: any) => (d.name || '').toLowerCase() === lowered);
     if (exact) return exact;
-    const partial = docs.filter((d: any) =>
-      (d.name || '').toLowerCase().includes(identifier.toLowerCase())
-    );
+    if (opts?.exact) {
+      throw new Error(`${kind} not found: "${identifier}" (delete needs an exact id or name)`);
+    }
+    const partial = docs.filter((d: any) => (d.name || '').toLowerCase().includes(lowered));
     if (partial.length === 1) return partial[0];
     throw new Error(
       partial.length > 1
@@ -7351,64 +7361,25 @@ export class FoundryDataAccess {
   }
 
   /**
-   * Read the music binding of a scene (playlist + playlistSound, with names).
+   * Read the music binding of a scene document (playlist + playlistSound,
+   * with names). Shared by the active-scene and scenes-list builders.
    */
-  async getSceneMusic(options: { scene_identifier: string }): Promise<any> {
-    this.validateFoundryState();
-
-    try {
-      const scene = this.findSceneByIdentifier(options.scene_identifier);
-      // On a live client, scene.playlist / playlistSound are resolved
-      // documents after an update; normalize back to ids.
-      const plRaw = (scene as any).playlist;
-      const sndRaw = (scene as any).playlistSound;
-      const playlistId = typeof plRaw === 'string' ? plRaw : plRaw?.id || null;
-      const soundId = typeof sndRaw === 'string' ? sndRaw : sndRaw?.id || null;
-      const playlistDoc = playlistId ? (game as any).playlists?.get(playlistId) || null : null;
-      const soundDoc = playlistDoc && soundId ? playlistDoc.sounds?.get(soundId) || null : null;
-
-      return {
-        success: true,
-        sceneId: scene.id,
-        sceneName: scene.name,
-        playlist: playlistId ? { id: playlistId, name: playlistDoc?.name || '(unknown)' } : null,
-        playlistSound: soundId ? { id: soundId, name: soundDoc?.name || '(unknown)' } : null,
-      };
-    } catch (error) {
-      throw new Error(
-        `Failed to get scene music: ${error instanceof Error ? error.message : 'Unknown error'}`
-      );
-    }
-  }
-
-  /**
-   * List playlists with their sounds, for name -> id resolution.
-   */
-  async listPlaylists(_options: Record<string, any> = {}): Promise<any> {
-    this.validateFoundryState();
-
-    try {
-      const playlists = (game as any).playlists?.contents || [];
-      return {
-        success: true,
-        playlists: playlists.map((pl: any) => ({
-          id: pl.id,
-          name: pl.name,
-          mode: pl.mode,
-          playing: pl.playing,
-          soundCount: pl.sounds?.size || 0,
-          sounds: (pl.sounds?.contents || []).map((s: any) => ({
-            id: s.id,
-            name: s.name,
-            path: s.path,
-          })),
-        })),
-      };
-    } catch (error) {
-      throw new Error(
-        `Failed to list playlists: ${error instanceof Error ? error.message : 'Unknown error'}`
-      );
-    }
+  private resolveSceneMusicBinding(scene: any): {
+    playlist: { id: string; name: string } | null;
+    playlistSound: { id: string; name: string } | null;
+  } {
+    // On a live client, scene.playlist / playlistSound are resolved
+    // documents after an update; normalize back to ids.
+    const plRaw = (scene as any).playlist;
+    const sndRaw = (scene as any).playlistSound;
+    const playlistId = typeof plRaw === 'string' ? plRaw : plRaw?.id || null;
+    const soundId = typeof sndRaw === 'string' ? sndRaw : sndRaw?.id || null;
+    const playlistDoc = playlistId ? (game as any).playlists?.get(playlistId) || null : null;
+    const soundDoc = playlistDoc && soundId ? playlistDoc.sounds?.get(soundId) || null : null;
+    return {
+      playlist: playlistId ? { id: playlistId, name: playlistDoc?.name || '(unknown)' } : null,
+      playlistSound: soundId ? { id: soundId, name: soundDoc?.name || '(unknown)' } : null,
+    };
   }
 
   /**
@@ -7637,7 +7608,10 @@ export class FoundryDataAccess {
       }
 
       if (options.action === 'delete') {
-        const doc = this.findMusicDoc((game as any).playlists, options.playlist, 'playlist');
+        // Delete never guesses: exact id or name only.
+        const doc = this.findMusicDoc((game as any).playlists, options.playlist, 'playlist', {
+          exact: true,
+        });
         if (!doc) throw new Error('delete requires a playlist identifier');
         const name = doc.name;
         await doc.delete();

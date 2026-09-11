@@ -24,7 +24,7 @@ export class SceneTools {
       {
         name: 'get-current-scene',
         description:
-          'Get information about the currently active scene, including tokens and layout',
+          'Get information about the currently active scene, including tokens, layout, and the music binding (playlist + playlistSound)',
         inputSchema: {
           type: 'object',
           properties: {
@@ -50,20 +50,6 @@ export class SceneTools {
         },
       },
       {
-        name: 'get-scene-music',
-        description: 'Get the music binding of a scene (playlist and playlistSound, by id or name)',
-        inputSchema: {
-          type: 'object',
-          properties: {
-            scene_identifier: {
-              type: 'string',
-              description: 'Scene id or exact name',
-            },
-          },
-          required: ['scene_identifier'],
-        },
-      },
-      {
         name: 'update-scene-music',
         description:
           'Set or clear the music binding of a scene. Pass playlist and optionally playlist_sound (ids or unique names, null to clear). Writes through the scene document API and syncs live to connected clients.',
@@ -84,15 +70,6 @@ export class SceneTools {
             },
           },
           required: ['scene_identifier'],
-        },
-      },
-      {
-        name: 'list-playlists',
-        description:
-          'List all playlists with their sounds (ids, names, paths) for resolving names to ids',
-        inputSchema: {
-          type: 'object',
-          properties: {},
         },
       },
     ];
@@ -146,24 +123,6 @@ export class SceneTools {
     }
   }
 
-  async handleGetSceneMusic(args: any): Promise<any> {
-    const schema = z.object({ scene_identifier: z.string().min(1) });
-    const { scene_identifier } = schema.parse(args);
-
-    this.logger.info('Getting scene music', { scene_identifier });
-    try {
-      const result = await this.foundryClient.query('foundry-mcp-bridge.get-scene-music', {
-        scene_identifier,
-      });
-      return { success: true, ...result };
-    } catch (error) {
-      this.logger.error('Failed to get scene music', error);
-      throw new Error(
-        `Failed to get scene music: ${error instanceof Error ? error.message : 'Unknown error'}`
-      );
-    }
-  }
-
   async handleUpdateSceneMusic(args: any): Promise<any> {
     const schema = z.object({
       scene_identifier: z.string().min(1),
@@ -188,19 +147,6 @@ export class SceneTools {
     }
   }
 
-  async handleListPlaylists(_args: any): Promise<any> {
-    this.logger.info('Listing playlists');
-    try {
-      const result = await this.foundryClient.query('foundry-mcp-bridge.list-playlists', {});
-      return { success: true, ...result };
-    } catch (error) {
-      this.logger.error('Failed to list playlists', error);
-      throw new Error(
-        `Failed to list playlists: ${error instanceof Error ? error.message : 'Unknown error'}`
-      );
-    }
-  }
-
   private formatSceneResponse(sceneData: any, includeTokens: boolean, includeHidden: boolean): any {
     const response: any = {
       id: sceneData.id,
@@ -213,6 +159,7 @@ export class SceneTools {
       },
       hasBackground: !!sceneData.background,
       navigation: sceneData.navigation,
+      music: sceneData.music || { playlist: null, playlistSound: null },
       elements: {
         walls: sceneData.walls || 0,
         lights: sceneData.lights || 0,

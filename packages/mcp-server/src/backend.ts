@@ -1772,18 +1772,8 @@ async function startBackend(): Promise<void> {
 
                   break;
 
-                case 'get-scene-music':
-                  result = await sceneTools.handleGetSceneMusic(args);
-
-                  break;
-
                 case 'update-scene-music':
                   result = await sceneTools.handleUpdateSceneMusic(args);
-
-                  break;
-
-                case 'list-playlists':
-                  result = await sceneTools.handleListPlaylists(args);
 
                   break;
 
