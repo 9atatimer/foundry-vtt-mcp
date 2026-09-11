@@ -395,6 +395,7 @@ export class CharacterTools {
           hasImage: !!entity.img,
           // Include full system data for advanced use cases
           system: entity.system,
+          effects: entity.effects ?? [],
         };
       } else if (entityType === 'action') {
         return {
@@ -669,7 +670,16 @@ export class CharacterTools {
 
   async handleManageWorldItems(args: any): Promise<any> {
     const { action } = z
-      .object({ action: z.enum(['create', 'list', 'update', 'add-to-actor', 'remove-from-actor', 'describe']) })
+      .object({
+        action: z.enum([
+          'create',
+          'list',
+          'update',
+          'add-to-actor',
+          'remove-from-actor',
+          'describe',
+        ]),
+      })
       .parse(args);
 
     switch (action) {
