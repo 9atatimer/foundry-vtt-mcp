@@ -309,6 +309,29 @@ interface TokenPlacementResult {
   errors?: string[] | undefined;
 }
 
+type ItemTargetingStatus = 'not-requested' | 'applied' | 'partial' | 'failed';
+
+interface AppliedItemTarget {
+  identifier: string;
+  tokenId: string;
+  tokenName: string;
+}
+
+interface FailedItemTarget {
+  identifier: string;
+  tokenId?: string | undefined;
+  tokenName?: string | undefined;
+  error: string;
+}
+
+interface ItemTargetingResult {
+  status: ItemTargetingStatus;
+  requested: string[];
+  applied: AppliedItemTarget[];
+  unresolved: string[];
+  failed: FailedItemTarget[];
+}
+
 /**
  * Persistent Enhanced Creature Index System
  * Stores pre-computed creature data in JSON file within Foundry world directory for instant filtering
@@ -7784,8 +7807,167 @@ export class FoundryDataAccess {
   }
 
   /**
-   * Move a token to a new position
+   * Resolve and apply requested targets without preventing the item workflow on failure.
    */
+
+  private async applyItemTargets(
+    actor: any,
+    targets: string[] | undefined
+  ): Promise<{ targeting: ItemTargetingResult; warnings: string[] }> {
+    const targeting: ItemTargetingResult = {
+      status: 'not-requested',
+      requested: targets ? [...targets] : [],
+      applied: [],
+      unresolved: [],
+      failed: [],
+    };
+    const warnings: string[] = [];
+
+    if (!targets || targets.length === 0) {
+      return { targeting, warnings };
+    }
+
+    targeting.status = 'failed';
+
+    try {
+      const currentCanvas = (globalThis as any).canvas;
+      const scene = currentCanvas?.scene ?? (game.scenes as any)?.active;
+      if (!scene) {
+        targeting.unresolved.push(...targets);
+        warnings.push('No active canvas scene is available to resolve the requested targets.');
+        return { targeting, warnings };
+      }
+
+      const canvasTokens = Array.from((currentCanvas?.tokens?.placeables ?? []) as any[]);
+      const controlledTokens = Array.from((currentCanvas?.tokens?.controlled ?? []) as any[]);
+      const sceneTokenObjects = Array.from(((scene as any).tokens ?? []) as any[])
+        .map((tokenDocument: any) => tokenDocument?.object)
+        .filter(Boolean);
+
+      const tokenId = (token: any): string =>
+        String(token?.id ?? token?.document?.id ?? token?.document?._id ?? '');
+      const tokenName = (token: any): string =>
+        String(token?.name ?? token?.document?.name ?? token?.actor?.name ?? 'Unknown Token');
+      const actingActorId = String(actor?.id ?? '');
+      const tokenRepresentsActor = (token: any): boolean =>
+        token?.actor === actor ||
+        (actingActorId !== '' &&
+          [token?.actor?.id, token?.document?.actorId, token?.actorId].some(
+            candidateId => String(candidateId ?? '') === actingActorId
+          ));
+      const sortTokens = (tokensToSort: any[]): any[] =>
+        [...tokensToSort].sort((a, b) => {
+          const idComparison = tokenId(a).localeCompare(tokenId(b));
+          return idComparison !== 0 ? idComparison : tokenName(a).localeCompare(tokenName(b));
+        });
+
+      const availableTokens: any[] = [];
+      const seenTokens = new Set<any>();
+      for (const token of [...canvasTokens, ...controlledTokens, ...sceneTokenObjects]) {
+        const identity = tokenId(token) || token;
+        if (!token || seenTokens.has(identity)) continue;
+        seenTokens.add(identity);
+        availableTokens.push(token);
+      }
+
+      const orderedTokens = sortTokens(availableTokens);
+      const orderedControlledTokens = sortTokens(controlledTokens);
+      const resolvedTargets: Array<{
+        identifier: string;
+        token: any;
+        tokenId: string;
+        tokenName: string;
+      }> = [];
+
+      for (const identifier of targets) {
+        const normalizedIdentifier = identifier.toLowerCase();
+        let token: any;
+
+        if (normalizedIdentifier === 'self') {
+          token =
+            orderedControlledTokens.find(tokenRepresentsActor) ??
+            orderedTokens.find(tokenRepresentsActor);
+        } else {
+          token = orderedTokens.find(candidate => {
+            const candidateName = tokenName(candidate).toLowerCase();
+            const candidateActorName = String(candidate?.actor?.name ?? '').toLowerCase();
+            return (
+              tokenId(candidate) === identifier ||
+              candidateName === normalizedIdentifier ||
+              candidateActorName === normalizedIdentifier
+            );
+          });
+        }
+
+        if (!token) {
+          targeting.unresolved.push(identifier);
+          warnings.push(`Target "${identifier}" was not found on the current canvas.`);
+          continue;
+        }
+
+        resolvedTargets.push({
+          identifier,
+          token,
+          tokenId: tokenId(token) || identifier,
+          tokenName: tokenName(token),
+        });
+      }
+
+      let hasAppliedTarget = false;
+      for (const resolvedTarget of resolvedTargets) {
+        try {
+          if (typeof resolvedTarget.token?.setTarget !== 'function') {
+            throw new Error('Token does not expose the public setTarget API');
+          }
+
+          await resolvedTarget.token.setTarget(true, {
+            releaseOthers: !hasAppliedTarget,
+          });
+          targeting.applied.push({
+            identifier: resolvedTarget.identifier,
+            tokenId: resolvedTarget.tokenId,
+            tokenName: resolvedTarget.tokenName,
+          });
+          hasAppliedTarget = true;
+        } catch (error) {
+          const message = error instanceof Error ? error.message : 'Unknown targeting error';
+          targeting.failed.push({
+            identifier: resolvedTarget.identifier,
+            tokenId: resolvedTarget.tokenId,
+            tokenName: resolvedTarget.tokenName,
+            error: message,
+          });
+          warnings.push(`Failed to target "${resolvedTarget.identifier}": ${message}`);
+        }
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown targeting error';
+      warnings.push(`Target setup failed: ${message}`);
+      for (const identifier of targets) {
+        if (
+          !targeting.applied.some(target => target.identifier === identifier) &&
+          !targeting.unresolved.includes(identifier) &&
+          !targeting.failed.some(target => target.identifier === identifier)
+        ) {
+          targeting.failed.push({ identifier, error: message });
+        }
+      }
+    }
+
+    if (
+      targeting.applied.length === targets.length &&
+      targeting.unresolved.length === 0 &&
+      targeting.failed.length === 0
+    ) {
+      targeting.status = 'applied';
+    } else if (targeting.applied.length > 0) {
+      targeting.status = 'partial';
+    } else {
+      targeting.status = 'failed';
+    }
+
+    return { targeting, warnings };
+  }
 
   /**
    * Use an item on a character (cast spell, use ability, consume item, etc.)
@@ -7811,6 +7993,8 @@ export class FoundryDataAccess {
     itemName?: string;
     actorName?: string;
     targets?: string[];
+    targeting: ItemTargetingResult;
+    warnings?: string[];
     requiresGMInteraction?: boolean;
   }> {
     this.validateFoundryState();
@@ -7835,58 +8019,8 @@ export class FoundryDataAccess {
     const itemAny = item;
     const systemId = (game.system as any).id;
 
-    // Handle targeting if targets are specified
-    const resolvedTargetNames: string[] = [];
-    if (targets && targets.length > 0) {
-      // Get all tokens on the current scene
-      const scene = (game.scenes as any)?.active;
-      if (!scene) {
-        throw new Error('No active scene to find targets on');
-      }
-
-      const sceneTokens = scene.tokens;
-      const tokenIds: string[] = [];
-
-      for (const targetIdentifier of targets) {
-        // Handle "self" - target the caster's token
-        if (targetIdentifier.toLowerCase() === 'self') {
-          // Find token for the caster actor
-          const selfToken = sceneTokens.find(
-            (t: any) => t.actor?.id === actor.id || t.actorId === actor.id
-          );
-          if (selfToken) {
-            tokenIds.push(selfToken.id);
-            resolvedTargetNames.push(actor.name);
-          } else {
-            console.warn(
-              `[foundry-mcp-bridge] No token found on scene for actor "${actor.name}" (self)`
-            );
-          }
-          continue;
-        }
-
-        // Find token by name or ID
-        const targetToken = sceneTokens.find(
-          (t: any) =>
-            t.id === targetIdentifier ||
-            t.name?.toLowerCase() === targetIdentifier.toLowerCase() ||
-            t.actor?.name?.toLowerCase() === targetIdentifier.toLowerCase()
-        );
-
-        if (targetToken) {
-          tokenIds.push(targetToken.id);
-          resolvedTargetNames.push(targetToken.name || targetToken.actor?.name || targetIdentifier);
-        } else {
-          console.warn(`[foundry-mcp-bridge] Target not found: "${targetIdentifier}"`);
-        }
-      }
-
-      // Set targets using Foundry's targeting system
-      if (tokenIds.length > 0 && game.user) {
-        await (game.user as any).updateTokenTargets(tokenIds);
-        console.log(`[foundry-mcp-bridge] Set targets: ${resolvedTargetNames.join(', ')}`);
-      }
-    }
+    const { targeting, warnings } = await this.applyItemTargets(actor, targets);
+    const resolvedTargetNames = targeting.applied.map(target => target.tokenName);
 
     try {
       // For items that may show dialogs (spells with choices, etc.),
@@ -7985,12 +8119,16 @@ export class FoundryDataAccess {
           itemId: item.id,
           itemName: item.name,
           targets: resolvedTargetNames,
+          targetingStatus: targeting.status,
+          targetingWarnings: warnings,
         },
         'success'
       );
 
       const targetInfo =
         resolvedTargetNames.length > 0 ? ` targeting ${resolvedTargetNames.join(', ')}` : '';
+      const targetingWarningInfo =
+        warnings.length > 0 ? ` Targeting warning: ${warnings.join(' ')}` : '';
 
       const result: {
         success: boolean;
@@ -7999,18 +8137,24 @@ export class FoundryDataAccess {
         itemName?: string;
         actorName?: string;
         targets?: string[];
+        targeting: ItemTargetingResult;
+        warnings?: string[];
         requiresGMInteraction?: boolean;
       } = {
         success: true,
         status: 'initiated',
-        message: `Item use initiated for ${actor.name} using ${item.name}${targetInfo}. If a dialog appeared in Foundry VTT, the GM should select options and confirm. The result will appear in chat.`,
+        message: `Item use initiated for ${actor.name} using ${item.name}${targetInfo}.${targetingWarningInfo} If a dialog appeared in Foundry VTT, the GM should select options and confirm. The result will appear in chat.`,
         itemName: item.name,
         actorName: actor.name,
+        targeting,
         requiresGMInteraction: true,
       };
 
       if (resolvedTargetNames.length > 0) {
         result.targets = resolvedTargetNames;
+      }
+      if (warnings.length > 0) {
+        result.warnings = warnings;
       }
 
       return result;
